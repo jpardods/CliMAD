@@ -122,6 +122,9 @@ def train_global_model_for_variable(
         & (df["date"] <= TEST_END)
     ].copy()
 
+    df_var[target_col] = df_var.groupby("station_id")[target_col].ffill()
+    df_var[target_col] = df_var.groupby("station_id")[target_col].bfill()
+
     if df_var.empty:
         return None, None
 
