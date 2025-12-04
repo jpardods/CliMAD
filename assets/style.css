@@ -1,14 +1,54 @@
 /* Fondo general oscuro elegante */
 body {
-    background: radial-gradient(circle at top left, #1f2933, #020617);
+    /* Color base de césped oscuro */
+    background-color: #064e3b;
     color: #e5e7eb;
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+    /* Rayas tipo campo de fútbol */
+    background-image:
+        repeating-linear-gradient(
+            90deg,
+            #065f46 0,
+            #065f46 80px,
+            #047857 80px,
+            #047857 160px
+        );
+    background-attachment: fixed;
 }
 
-/* Contenedor principal de la app */
+
 .app-container {
-    padding: 20px;
+    position: relative;
+    max-width: 1450px;
+    margin: 16px auto;
+    padding: 12px;
 }
+
+/* Capa de "campo" detrás del contenido */
+.app-container::before {
+    content: "";
+    position: absolute;
+    inset: 0;                /* ocupa todo el contenedor */
+    border-radius: 24px;
+    border: 3px solid rgba(255, 255, 255, 0.5);   /* líneas del campo */
+    box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.6);  /* pequeño contorno oscuro */
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.app-container::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 8%;
+    bottom: 8%;
+    width: 0;
+    border-left: 2px solid rgba(255, 255, 255, 0.5);  /* línea de medio campo */
+    opacity: 0.4;
+    pointer-events: none;
+}
+
 
 /* Cabecera */
 .app-header {
@@ -92,4 +132,92 @@ body {
 /* Gráficos: quitar fondo blanco */
 .js-plotly-plot .plotly .bg {
     fill: #020617 !important;
+}
+
+/* Panel de datos de estación */
+
+.station-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+}
+
+.station-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #e5e7eb;
+}
+
+.station-date {
+    font-size: 13px;
+    color: #9ca3af;
+    margin-top: 2px;
+}
+
+.station-badge {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+}
+
+.station-badge-real {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.5);
+}
+
+.station-badge-pred {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.5);
+}
+
+.station-big-metric {
+    margin: 6px 0 14px 0;
+}
+
+.station-big-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #9ca3af;
+}
+
+.station-big-value {
+    font-size: 30px;
+    font-weight: 700;
+    color: #e5e7eb;
+}
+
+/* Grid de métricas secundarias */
+
+.station-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
+}
+
+.station-metric-card {
+    background: rgba(15, 23, 42, 0.9);
+    border-radius: 10px;
+    padding: 8px 10px;
+    border: 1px solid #1f2937;
+}
+
+.station-metric-label {
+    font-size: 11px;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 2px;
+}
+
+.station-metric-value {
+    font-size: 14px;
+    font-weight: 500;
+    color: #e5e7eb;
 }

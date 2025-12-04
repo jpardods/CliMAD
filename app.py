@@ -1,4 +1,5 @@
 import pandas as pd
+import datetime
 from dash import Dash, dcc, html, Input, Output, State
 import plotly.express as px
 import plotly.graph_objects as go
@@ -30,6 +31,8 @@ station_info = (
     .sort_values("station_name")
 )
 
+today = datetime.date.today()
+
 station_options = [
     {"label": row["station_name"], "value": row["station_id"]}
     for _, row in station_info.iterrows()
@@ -53,6 +56,17 @@ variable_options = [
     c for c in df.columns
     if c not in exclude_cols and pd.api.types.is_numeric_dtype(df[c])
 ]
+
+VARIABLE_LABELS = {
+    "temperature": "Temperatura (°C)",
+    "precipitation": "Precipitación (mm)",
+    "pressure": "Presión (hPa)",
+    "relative_humidity": "Humedad relativa (%)",
+    "solar_radiation": "Radiación solar (W/m²)",
+    "wind_speed": "Velocidad del viento (m/s)",
+    "wind_direction": "Dirección del viento (°)",
+}
+
 default_variable = "temperature" if "temperature" in variable_options else variable_options[0]
 
 # Rango de temperatura para el mapa
@@ -113,7 +127,7 @@ app.layout = html.Div(
                                             id="date-picker",
                                             min_date_allowed=min_date,
                                             max_date_allowed=max_date,
-                                            date=min_date,
+                                            date=today if min_date <= pd.to_datetime(today) <= max_date else min_date,
                                             display_format="YYYY-MM-DD",
                                         ),
                                         html.Br(),
@@ -211,9 +225,12 @@ app.layout = html.Div(
                                         html.Div("Variable", className="control-label"),
                                         dcc.Dropdown(
                                             id="compare-variable",
-                                            options=[{"label": v, "value": v} for v in variable_options],
+                                            options=[
+                                                {"label": VARIABLE_LABELS.get(v, v), "value": v}
+                                                for v in variable_options
+                                            ],
                                             value=default_variable,
-                                            clearable=False,
+                                            clearable=False
                                         ),
                                     ],
                                 ),
@@ -374,44 +391,121 @@ def update_station_panel(date_value, station_id):
     is_pred = bool(row.get("is_pred", False))
     tipo_str = "Predicción" if is_pred else "Dato observado"
 
-    header = html.Div(
-        [
-            html.P(f"Estación: {row['station_name']} ({station_id})"),
-            html.P(f"Fecha: {date_value.date()}"),
-            html.P(f"Tipo de dato: {tipo_str}"),
-            html.P(f"Altitud: {row.get('altitude', 'N/A')} m"),
-        ],
-        style={"marginBottom": "10px"},
-    )
+    # ---------- Mapeo nombres + unidades ----------
+    campos = [
+        ("temperature", "Temperatura", "°C"),
+        ("relative_humidity", "Humedad relativa", "%"),
+        ("precipitation", "Precipitación", "mm"),
+        ("pressure", "Presión", "hPa"),
+        ("solar_radiation", "Radiación solar", "W/m²"),
+        ("wind_speed", "Velocidad del viento", "m/s"),
+        ("wind_direction", "Dirección del viento", "°"),
+        ("altitude", "Altitud", "m"),
+    ]
 
-    rows_html = []
-    for col in df.columns:
-        if col in ["date", "station_id", "station_name", "station_id_cat", "lat", "lon"]:
-            continue
-        val = row[col]
-        if pd.isna(val):
-            continue
+    # ---------- Emoji / icono de tiempo ----------
+    temp_value = row.get("temperature", None)
+    precip_value = row.get("precipitation", 0.0)
 
+    weather_emoji = "❓"
+    if pd.notna(temp_value):
+        t = float(temp_value)
+        p = float(precip_value) if pd.notna(precip_value) else 0.0
+
+        if p >= 5:
+            weather_emoji = "🌧️"   # lluvia fuerte
+        elif p > 0:
+            weather_emoji = "🌦️"   # chubascos
+        else:
+            if t < 0:
+                weather_emoji = "❄️"
+            elif t < 8:
+                weather_emoji = "🥶"
+            elif t < 16:
+                weather_emoji = "🌥️"
+            elif t < 24:
+                weather_emoji = "🌤️"
+            elif t < 30:
+                weather_emoji = "☀️"
+            else:
+                weather_emoji = "🥵"
+
+    # Métrica principal: temperatura + emoji
+    big_metric = None
+    if pd.notna(temp_value):
+        big_metric = html.Div(
+            className="station-big-metric",
+            children=[
+                html.Div("Temperatura", className="station-big-label"),
+                html.Div(
+                    f"{temp_value:.1f} °C {weather_emoji}",
+                    className="station-big-value",
+                ),
+            ],
+        )
+
+    # ---------- Tarjetas pequeñas para el resto ----------
+    metric_cards = []
+    for key, label, unit in campos:
+        if key == "temperature":
+            continue  # ya usada como métrica grande
+        if key not in row or pd.isna(row[key]):
+            continue
+        val = row[key]
         if isinstance(val, (float, int)):
-            val_str = f"{val:.3f}"
+            val_str = f"{val:.1f}" if abs(val) < 1000 else f"{val:.0f}"
         else:
             val_str = str(val)
 
-        rows_html.append(
-            html.Tr(
-                [
-                    html.Th(str(col)),
-                    html.Td(val_str),
-                ]
+        metric_cards.append(
+            html.Div(
+                className="station-metric-card",
+                children=[
+                    html.Div(label, className="station-metric-label"),
+                    html.Div(f"{val_str} {unit}", className="station-metric-value"),
+                ],
             )
         )
 
-    table = html.Table(
-        [html.Tbody(rows_html)],
-        style={"width": "100%", "borderCollapse": "collapse"},
+    # ---------- Encabezado ----------
+    header = html.Div(
+        className="station-header",
+        children=[
+            html.Div(
+                children=[
+                    html.Div(
+                        f"{row['station_name']} ({station_id})",
+                        className="station-name",
+                    ),
+                    html.Div(
+                        f"{date_value.date()}",
+                        className="station-date",
+                    ),
+                ]
+            ),
+            html.Span(
+                tipo_str,
+                className=(
+                    "station-badge station-badge-pred"
+                    if is_pred
+                    else "station-badge station-badge-real"
+                ),
+            ),
+        ],
     )
 
-    return html.Div([header, table])
+    return html.Div(
+        children=[
+            header,
+            big_metric if big_metric is not None else None,
+            html.Div(
+                className="station-metric-grid",
+                children=metric_cards,
+            ),
+        ]
+    )
+
+
 
 
 # -----------------------------------------------------------
@@ -461,7 +555,7 @@ def update_compare_graph(station1, station2, variable):
         "wind_speed": "Velocidad viento (m/s)",
         "wind_direction": "Dirección viento (°)",
     }
-    var_label = variable_nombres.get(variable, variable)
+    var_label = VARIABLE_LABELS.get(variable, variable)
 
     # Tipo de dato (real / predicción)
     dff["tipo"] = dff["is_pred"].map({False: "Real", True: "Predicción"})
