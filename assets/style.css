@@ -221,3 +221,30 @@ body {
     font-weight: 500;
     color: #e5e7eb;
 }
+
+.field-item {
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid #334155;
+    transition: 0.2s;
+}
+
+.field-item:hover {
+    background: rgba(30, 41, 59, 0.95);
+    transform: scale(1.01);
+}
+
+.field-name {
+    font-weight: 700;
+    font-size: 13px;
+    color: #f1f5f9;
+    margin-bottom: 3px;
+}
+
+.field-meta {
+    font-size: 12px;
+    color: #cbd5e1;
+    margin-bottom: 2px;
+}

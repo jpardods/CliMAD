@@ -10,6 +10,9 @@ import plotly.graph_objects as go
 
 DATA_PATH = "src/data/meteo_all_predictions.csv"
 TEMPERATURE_COL = "temperature"
+# Carga de polideportivos / campos de fútbol municipales
+FIELDS_PATH = "src/data/200186-0-polideportivos.csv"
+
 
 # -----------------------------------------------------------
 # CARGA DE DATOS
@@ -76,6 +79,54 @@ temp_max = df[TEMPERATURE_COL].max()
 # Centro aproximado del mapa (Madrid)
 center_lat = df["lat"].mean()
 center_lon = df["lon"].mean()
+
+polidep_df = pd.read_csv(
+    FIELDS_PATH,
+    encoding="latin1",
+    sep=";",
+)
+polidep_df = polidep_df.rename(
+    columns={
+        "NOMBRE": "field_name",
+        "LATITUD": "lat",
+        "LONGITUD": "lon",
+    }
+)
+# Limpiamos columnas que nos interesan
+fields_df = polidep_df[["field_name", "lat", "lon", "NOMBRE-VIA", "CLASE-VIAL", "NUM", "EMAIL", "TELEFONO"]]
+fields_df = fields_df.dropna(subset=["lat", "lon"])
+fields_df = fields_df.rename(columns={
+    "NOMBRE-VIA": "street",
+    "NUM": "number",
+    "TELEFONO": "phone",
+    "CLASE-VIAL": "street_type",
+    "EMAIL": "email",
+})
+
+# Garantizamos columnas aunque no existan
+for col in ["street", "number", "phone", "email", "street_type"]:
+    if col not in fields_df.columns:
+        fields_df[col] = ""
+
+fields_df = fields_df[["field_name", "lat", "lon", "street", "number", "phone", "email", "street_type"]]
+fields_df = fields_df.dropna(subset=["lat", "lon"])
+
+import math
+
+def haversine_distance(lat1, lon1, lat2, lon2):
+    """
+    Distancia entre dos puntos (lat, lon) en metros.
+    """
+    R = 6371000  # radio de la Tierra en metros
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
 
 # -----------------------------------------------------------
 # INICIALIZACIÓN DE LA APP
@@ -165,15 +216,25 @@ app.layout = html.Div(
                             className="col-12 col-lg-3",
                             children=[
                                 html.Div(
-                                    className="card-panel",
+                                    className="card-panel mb-3",
                                     children=[
                                         html.Div("Datos del día", className="section-title"),
                                         html.Div(
                                             id="station-data-panel",
-                                            style={"maxHeight": "420px", "overflowY": "auto"},
+                                            style={"maxHeight": "260px", "overflowY": "auto"},
                                         ),
                                     ],
-                                )
+                                ),
+                                html.Div(
+                                    className="card-panel",
+                                    children=[
+                                        html.Div("Campos de fútbol cercanos (≤500m)", className="section-title"),
+                                        html.Div(
+                                            id="nearby-fields-panel",
+                                            style={"maxHeight": "220px", "overflowY": "auto", "fontSize": "12px"},
+                                        ),
+                                    ],
+                                ),
                             ],
                         ),
                     ],
@@ -634,6 +695,113 @@ def update_compare_graph(station1, station2, variable):
     )
 
     return fig
+
+@app.callback(
+    Output("nearby-fields-panel", "children"),
+    Input("date-picker", "date"),
+    Input("selected-station-store", "data"),
+)
+def update_nearby_fields(date_value, station_id):
+    # Solo necesitamos la estación; la fecha aquí no importa
+    if station_id is None:
+        return "Selecciona una estación en el mapa."
+
+    station_id = str(station_id)
+
+    # Tomamos una fila cualquiera de esa estación (lat/lon fijos por estación)
+    station_row = df[df["station_id"] == station_id].dropna(subset=["lat", "lon"])
+    if station_row.empty:
+        return "No hay coordenadas para esta estación."
+
+    station_row = station_row.iloc[0]
+    s_lat = station_row["lat"]
+    s_lon = station_row["lon"]
+
+    # Calculamos distancias a cada campo de fútbol
+    def compute_dist(row):
+        return haversine_distance(s_lat, s_lon, float(row["lat"].replace(",", ".")), float(row["lon"].replace(",", ".")))
+
+    tmp = fields_df.copy()
+    tmp["dist_m"] = tmp.apply(compute_dist, axis=1)
+
+    # Filtrar campos a ≤ 500 m
+    nearby = tmp[tmp["dist_m"] <= 500].sort_values("dist_m")
+
+    if nearby.empty:
+        return html.Div(
+            "No hay campos de fútbol municipales a menos de 500 m.",
+            style={"color": "#9ca3af"},
+        )
+
+    items = []
+    for _, r in nearby.iterrows():
+        # Construir dirección: street_type + street + number
+        street_type = r.get("street_type", "")
+        street = r.get("street", "")
+        number = r.get("number", "")
+
+        parts = []
+        if isinstance(street_type, str) and street_type.strip():
+            parts.append(street_type.strip())
+        if isinstance(street, str) and street.strip():
+            parts.append(street.strip())
+
+        main_street = " ".join(parts)
+        # Normalización del número (evitar 107.0 → 107)
+        def clean_number(x):
+            if pd.isna(x):
+                return ""
+            if isinstance(x, str):
+                return x.strip()
+            try:
+                # Si es un número flotante como 107.0 → 107
+                if float(x).is_integer():
+                    return str(int(float(x)))
+                else:
+                    return str(x)
+            except:
+                return str(x)
+
+        num_str = clean_number(number)
+
+        if main_street and num_str:
+            address = f"{main_street} {num_str}"
+        elif main_street:
+            address = main_street
+        else:
+            address = "Dirección no disponible"
+
+        # Teléfono
+        phone = r.get("phone", "")
+        if isinstance(phone, str) and phone.strip():
+            phone_text = f"📞 {phone.strip()}"
+        else:
+            phone_text = "📞 No disponible"
+
+        # Email
+        email = r.get("email", "")
+        if isinstance(email, str) and email.strip():
+            email_text = f"✉️ {email.strip()}"
+        else:
+            email_text = "✉️ No disponible"
+
+        items.append(
+            html.Div(
+                className="field-item",
+                children=[
+                    html.Div("⚽ " + r["field_name"], className="field-name"),
+                    html.Div(address, className="field-meta"),
+                    html.Div(phone_text, className="field-meta"),
+                    html.Div(email_text, className="field-meta"),
+                    html.Div(
+                        f"Distancia: {r['dist_m']:.0f} m",
+                        className="field-meta",
+                    ),
+                ],
+            )
+        )
+
+    return html.Div(items)
 
 
 
