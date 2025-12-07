@@ -228,7 +228,7 @@ app.layout = html.Div(
                                 html.Div(
                                     className="card-panel",
                                     children=[
-                                        html.Div("Campos de fútbol cercanos (≤500m)", className="section-title"),
+                                        html.Div("Campos de fútbol cercanos (≤ 1km)", className="section-title"),
                                         html.Div(
                                             id="nearby-fields-panel",
                                             style={"maxHeight": "220px", "overflowY": "auto", "fontSize": "12px"},
@@ -725,11 +725,11 @@ def update_nearby_fields(date_value, station_id):
     tmp["dist_m"] = tmp.apply(compute_dist, axis=1)
 
     # Filtrar campos a ≤ 500 m
-    nearby = tmp[tmp["dist_m"] <= 500].sort_values("dist_m")
+    nearby = tmp[tmp["dist_m"] <= 1000].sort_values("dist_m")
 
     if nearby.empty:
         return html.Div(
-            "No hay campos de fútbol municipales a menos de 500 m.",
+            "No hay campos de fútbol municipales a menos de 1km.",
             style={"color": "#9ca3af"},
         )
 
